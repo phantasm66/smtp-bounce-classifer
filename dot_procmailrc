@@ -1,0 +1,7 @@
+:0
+* ^To:.*(abuse|bounce.*\.mydomain\.com)
+|/var/spool/mail/bounce/smtp-bounce-classifer/bounce_parser.rb
+
+:0
+/dev/null
+
