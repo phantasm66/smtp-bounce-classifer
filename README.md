@@ -5,7 +5,13 @@ Parse and classify SMTP bounce messages and provider FBLs (feedback loops) from 
 
 The .procmailrc file:
 ---------------------
-The .procmailrc file goes in the homedir of the user that recieves your bounce messages (example: /var/spool/mail/bounce/.procmailrc). This file must be named '.procmailrc'. The basic logic of the .procmailrc file is simple. Using basic regex, you define a particular SMTP header that you want to trigger the pipe to the bounce parser/classifier. In the included .procmailrc we use the To: SMTP header and parse/classify any bounce message that matches 'To:<any amount of whitespace><'abuse' or 'bounce'><anything>.mydomain.com'. If you use a static 'To' address for all of your bounce messages, then you can set this to something literal or with less variance in the regex. Procmailrc filters are referenced in the order that they are listed. In the included .procmailrc any smtp message that does not match our 'To:' regex pattern goes to the next rule and is discarded (deliver the message to /dev/null).
+The .procmailrc file goes in the homedir of the user that recieves your bounce messages (example: /var/spool/mail/bounce/.procmailrc). This file must be named '.procmailrc'. The basic logic of the .procmailrc file is simple. Using basic regex, you define a particular SMTP header that you want to trigger the pipe to the bounce parser/classifier. In the included .procmailrc we use the 'To:' SMTP header and parse/classify any bounce message that matches
+
+    To:<any amount of whitespace><'abuse' or 'bounce'><anything>.mydomain.com
+
+ If you send email messages using a static MAIL FROM address, then you can definitely set this to something more literal or with less variance in the regex. 
+
+Procmailrc filters are referenced in the order that they are listed. For the included .procmailrc any smtp message that does not match the 'To:' regex pattern goes to the next rule (deliver the message to /dev/null).
 
 bounce_parser.rb:
 -----------------
@@ -13,7 +19,7 @@ This expects that you send out all email messages with a custom header in the fo
 
     X-rcpt: <original recipient@domain.com>
 
-Many external providers try super hard to redact all original recipient address info from email messages before sending it back to the sending domain (you!). Most are pretty thorough at doing this, so you may want to mess around with a more clever header approach, like encoding a header with some algorithm that allows the recipient address to stay hidden in the headers until you recieve it back and can "look" for it, then decode it. I do this for my company's sent messages, but i cannot include that code for you here :(
+Many external providers try *super* hard to redact all original recipient address info from email messages before sending it back to the sending domain (you!). Most are quite successful at doing this, so you may want to mess around with a more clever header approach, like encoding a header with some algorithm that allows the recipient address to stay hidden in the headers until you recieve it back and can "look" for it, then decode it.
 
 The parser forcefully re-encodes all recieved messages to UTF-8. This prevents weird artifacts on messed up and foreign encodings before the message is bounced/sent back to you. It also allows for the ancient "quoted-printable" MIME encoding (an ASCII encoding that restricts line lengths to 76 characters by adding an '=' and continuing on the next line). Quoted-printable is not base64 and is extremely annoying when trying to parse text.
 
