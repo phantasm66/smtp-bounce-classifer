@@ -13,8 +13,8 @@ The .procmailrc file goes in the homedir of the user that recieves your bounce m
 
 Procmailrc filters are referenced in the order that they are listed. For the included .procmailrc any smtp message that does not match the 'To:' regex pattern goes to the next rule (deliver the message to /dev/null).
 
-bounce_parser.rb:
------------------
+smtp-bounce-classifer.rb:
+-------------------------
 This expects that you send out all email messages with a custom header in the form of
 
     X-rcpt: <original recipient@domain.com>
