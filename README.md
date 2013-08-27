@@ -49,5 +49,5 @@ Once a message has been parsed and classified, the following info will be append
 
 This file can be tailed by something like logstash and shipped/stored somewhere via any number of different ways (see https://github.com/logstash/logstash/tree/master/lib/logstash/outputs).
 
-For 'deadrcpt' and 'fbl' classifications, the entire recieved email message will also be logged simultaneously to a completely separate flat file. This is helpful if you have a false positive and you need to go back and inspect the recieved bounce/fbl in order to determine where the classifier failed (and hopefully modiy the classifier regex so it doesn't happen again!).
+For 'deadrcpt' and 'fbl' classifications, the entire recieved email message will also be logged simultaneously to a completely separate flat file. This is helpful if you have a false positive and you need to go back and inspect the recieved bounce/fbl in order to determine where the classifier failed (and hopefully modify the classifier regex so it doesn't happen again!).
 
