@@ -1,5 +1,5 @@
-smtp-bounce-classifer
-=====================
+SMTP Bounce Classifier
+======================
 
 Parse and classify SMTP bounce messages and provider FBLs (feedback loops) from *any* mail exchanger (MX)
 
