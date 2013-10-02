@@ -2,51 +2,31 @@
 
 require 'base64'
 require 'time'
+require 'date'
 
 our_domain = 'mydomain.com'
 classifier_log = '/var/log/smtp-bounce-classifer.log'
 raw_bounce_log = '/var/log/smtp-bounce-classifier-RAW-BOUNCE.log'
 
-x_input = ARGF.read
+input = ARGF.read
+datetime = Time.now.to_s.split[0..1].join(' ')
 
-dsn = x_input.encode("UTF-16BE", :invalid => :replace).encode("UTF-8")
+dsn = input.encode("UTF-16BE", :invalid => :replace).encode("UTF-8")
+dsn = dsn.gsub("=\n", '')
 
-unless x_rcpt = dsn.match(/X-rcpt:(\n)?\s*.*\n/)
-  x_rcpt = dsn..match(/To:.*@#{Regexp.escape(our_domain)}\n/)
+x_rcpt = dsn.match(/\nX-rcpt:\s*(.*)\n/)
+
+if x_rcpt.nil?
+  x_rcpt = dsn..match(/To:(.*)@#{Regexp.escape(our_domain)}\n/)
+  x_rcpt = x_rcpt[1] unless x_rcpt.nil?
+else
+  x_rcpt = x_rcpt[1]
 end
-if x_rcpt.to_s.length == 77
-  last_chars = x_rcpt.to_s[-2,2]
-  if last_chars == "=\n"
-    str = dsn.match(/X-rcpt:(\n)?\s*.*List-Unsub/m)
-    str = str.to_s.split("\nList-Unsub")[0]
-    x_rcpt = str.gsub(/=\n/, '')
-  end
-end
 
-rcpt = x_rcpt.to_s.split('X-rcpt:')[1].strip
-rcpt.downcase!
+rcpt = x_rcpt.strip.downcase
 domain = rcpt.split("@")[1]
 
-orig_timestamp = dsn.match(/Arrival-Date:.*\n/)
-unless orig_timestamp.nil?
-  if orig_timestamp.to_s.length >= 5
-    date = orig_timestamp.to_s.split(/(Date:|;)\s*/)[2].split(' ')
-    year = date[3]
-    month = date[2]
-    day = date[1]
-    hour = date[4].split(":")[0]
-    minute = date[4].split(":")[1]
-    seconds = date[4].split(":")[2]
-    datetime = Time.local(year, month, day, hour, minute, seconds).to_s.split(" -")[0]
-  end
-end
-datetime = Time.now.to_s.split(" -")[0] if datetime.nil?
-
-###############
-# classifize! #
-###############
-
-# classifiers for feedback loops
+# BEGIN: classifiers for feedback loops
 if dsn.match(/Feedback-Type:/)
   classification = "fbl"
 elsif dsn.match(/From:\sstaff@hotmail\.com/)
@@ -56,16 +36,17 @@ elsif dsn.match(/From:.*@arf\.mail\.yahoo/)
 elsif dsn.match(/Subject:\s*unsubscribe/i)
   classification = "fbl"
 
-# classifier for expired messages
+# BEGIN: classifier for expired messages
 elsif dsn.match(/Status:\s4\.\d\.\d/i)
   classification = "expired"
 
-# classifiers for Diagnostic-Code header
+# BEGIN: classifiers for Diagnostic-Code header
 elsif diagnostic_code = dsn.match(/Diagnostic-Code: (.*?)\n--/m)
   dsn_reason = diagnostic_code[1]
   dsn_reason = dsn_reason.to_s
   dsn_reason.gsub!(/\n/, '')
   dsn_reason.gsub!(/\s+/, ' ')
+
   case dsn_reason
     when /njabl/i
       classification = "njabl"
@@ -112,7 +93,6 @@ elsif diagnostic_code = dsn.match(/Diagnostic-Code: (.*?)\n--/m)
       too\s(many|fast|much)|slow\sdown|throttl(e|ing)|
       to\sabuse|excessive|bl(a|o)cklist|
       (junk|intrusion)|
-      Blue\sState\sDigital|
       listed\sat|
       client.*not\sauthenticated|
       administrative.*prohibit|
@@ -123,7 +103,7 @@ elsif diagnostic_code = dsn.match(/Diagnostic-Code: (.*?)\n--/m)
       reject.*(content|policy)|
       not\saccept.*mail|
       message.*re(fused|ject)|
-      transaction\sfailed.*psmtp| 
+      transaction\sfailed.*psmtp|
       sorbs|rbl|spam|spamcop|block|den(y|ied)|
       unsolicited|
       not\sauthorized\sfrom\sthis\sip|
@@ -143,7 +123,7 @@ elsif diagnostic_code = dsn.match(/Diagnostic-Code: (.*?)\n--/m)
       classification = "unclassified"
   end
 
-# classifiers for no Diagnostic-Code header
+# BEGIN: classifiers for no Diagnostic-Code header
 elsif dsn.match(/X-Autoreply:\s*yes/i)
   classification = "autoreply"
 elsif dsn.match(/Subject:.*(out\s+of.*office|auto.*re(ply|spon))/i)
@@ -152,6 +132,8 @@ elsif dsn.match(/\s\(aol;\saway\)/i)
   classification = "autoreply"
 elsif dsn.match(/auto-submitted:\s*auto-replied/i)
   classification = "autoreply"
+
+# BEGIN: message delayed notification
 elsif dsn.match(/(Action:\s*delayed|Will-Retry-Until)/i)
   classification = "delaydsn"
 elsif dsn.match(/Subject:.*delayed\smail/i)
@@ -160,14 +142,14 @@ elsif dsn.match(/Subject:.*delivery.*status.*delay/i)
   classification = "delaydsn"
 elsif dsn.match(/delivery\sto.*has\sbeen\sdelayed/i)
   classification = "delaydsn"
+
+# BEGIN: dead recipient address
 elsif dsn.match(/this\suser\sdoesn\'t\shave\sa\s.*\saccount/i)
   classification = "deadrcpt"
 elsif dsn.match(/user.*doesn.*mail.*your.*address/i)
   classification = "deadrcpt"
 elsif dsn.match(/in\smy\scontrol.*locals/i)
   classification = "deadrcpt"
-elsif dsn.match(/quota.*exceed/i)
-  classification = "fullbox"
 elsif dsn.match(/invalid.*mailbox/i)
   classification = "deadrcpt"
 elsif dsn.match(/user\sunknown/i)
@@ -182,24 +164,33 @@ elsif dsn.match(/hop\scount\sexceeded/i)
   classification = "deadrcpt"
 elsif dsn.match(/delivery\sto.*(failed|aborted\safter)/i)
   classification = "deadrcpt"
+
+# BEGIN: full mailbox
 elsif dsn.match(/(size|(in|mail)box).*(full|size|exceed|many\smessages|much\sdata)/i)
   classification = "fullbox"
+elsif dsn.match(/quota.*exceed/i)
+  classification = "fullbox"
+
+# BEGIN: rbl/policy block
 elsif dsn.match(/5\.7\.1.*(reject|spam)/i)
   classification = "blocked"
 elsif dsn.match(/protected.*reflexion/i)
   classification = "blocked"
 elsif dsn.match(/said:\s.*(spam|rbl|blocked|blacklist|abuse)/i)
   classification = "blocked"
+
+# BEGIN: temporary error
 elsif dsn.match(/open\smailbox\sfor\s.*\stemporary\serror/i)
   classification = "tmperr"
 elsif dsn.match(/subject.*mail\ssystem\serror/i)
   classification = "tmperr"
+
+# BEGIN: unclassified catchall
 else
   classification = "unclassified"
 end
 
 bounce_data = "#{datetime} #{rcpt} #{domain} #{classification}"
-
 File.open(classifier_log, "a") {|line| line.puts bounce_data}
 
 if classification =~ /^(fbl|deadrcpt)$/
